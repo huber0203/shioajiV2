@@ -110,11 +110,11 @@ def quote():
             logger.error(error_msg)
             return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
 
-        code = data.get("code")  # 改為官方參數 "code"
+        stock_code = data.get("stock_code")
         type_ = data.get("type", "stock")  # 預設為 stock
 
-        if not code:
-            error_msg = "Missing required parameter: code"
+        if not stock_code:
+            error_msg = "Missing required parameter: stock_code"
             logger.error(error_msg)
             return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
 
@@ -123,7 +123,7 @@ def quote():
             logger.error(error_msg)
             return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
-        logger.info(f"Received quote request: code={code}, type={type_}")
+        logger.info(f"Received quote request: stock_code={stock_code}, type={type_}")
 
         # 根據 type 選擇合約類型
         contract = None
@@ -131,51 +131,51 @@ def quote():
 
         if type_ == "stock":
             # 嘗試從 TSE 查詢股票合約
-            logger.info(f"Fetching contract for code={code} from TSE")
-            contract = api.Contracts.Stocks.TSE[code]
+            logger.info(f"Fetching contract for stock_code={stock_code} from TSE")
+            contract = api.Contracts.Stocks.TSE[stock_code]
             market = "TSE"
 
             # 如果 TSE 中找不到，嘗試從 OTC 查詢
             if contract is None:
-                logger.info(f"Contract not found in TSE, trying OTC for code={code}")
-                contract = api.Contracts.Stocks.OTC[code]
+                logger.info(f"Contract not found in TSE, trying OTC for stock_code={stock_code}")
+                contract = api.Contracts.Stocks.OTC[stock_code]
                 market = "OTC"
 
             if contract is None:
-                error_msg = f"Contract not found for code={code} in TSE or OTC"
+                error_msg = f"Contract not found for stock_code={stock_code} in TSE or OTC"
                 logger.error(error_msg)
                 return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
         elif type_ == "futures":
             # 查詢期貨合約
-            logger.info(f"Fetching futures contract for code={code}")
-            contract = api.Contracts.Futures[code]
+            logger.info(f"Fetching futures contract for code={stock_code}")
+            contract = api.Contracts.Futures[stock_code]
             market = "Futures"
 
             if contract is None:
-                error_msg = f"Futures contract not found for code={code}"
+                error_msg = f"Futures contract not found for code={stock_code}"
                 logger.error(error_msg)
                 return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
         elif type_ == "options":
             # 查詢選擇權合約
-            logger.info(f"Fetching options contract for code={code}")
-            contract = api.Contracts.Options[code]
+            logger.info(f"Fetching options contract for code={stock_code}")
+            contract = api.Contracts.Options[stock_code]
             market = "Options"
 
             if contract is None:
-                error_msg = f"Options contract not found for code={code}"
+                error_msg = f"Options contract not found for code={stock_code}"
                 logger.error(error_msg)
                 return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
         elif type_ == "index":
             # 查詢指數合約
-            logger.info(f"Fetching index contract for code={code} from TSE")
-            contract = api.Contracts.Indexs.TSE[code]
+            logger.info(f"Fetching index contract for code={stock_code} from TSE")
+            contract = api.Contracts.Indexs.TSE[stock_code]
             market = "Index"
 
             if contract is None:
-                error_msg = f"Index contract not found for code={code} in TSE"
+                error_msg = f"Index contract not found for code={stock_code} in TSE"
                 logger.error(error_msg)
                 return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
@@ -188,7 +188,7 @@ def quote():
         logger.info(f"Contract found in {market}: {json.dumps(contract.__dict__, default=str)}")
 
         # 查詢快照資料
-        logger.info(f"Fetching quote for code={code} (type={type_})")
+        logger.info(f"Fetching quote for code={stock_code} (type={type_})")
         quote = api.snapshots([contract])[0]
         logger.info(f"Quote fetched successfully: {json.dumps(quote, default=str)}")
 
@@ -203,7 +203,7 @@ def quote():
         }
 
     except KeyError as ke:
-        error_msg = f"Contract not found for code={code} (type={type_}, KeyError: {str(ke)})"
+        error_msg = f"Contract not found for code={stock_code} (type={type_}, KeyError: {str(ke)})"
         logger.error(error_msg)
         return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
     except Exception as e:
