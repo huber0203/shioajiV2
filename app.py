@@ -156,6 +156,9 @@ def quote():
             market = "Futures"
 
             if contract is None:
+                logger.info(f"Contract not found for code={code}, listing available futures contracts")
+                available_futures = {c.code: c.__dict__ for c in list(api.Contracts.Futures) if hasattr(c, 'code')}
+                logger.info(f"Available futures contracts: {json.dumps(available_futures, default=str)}")
                 error_msg = f"Futures contract not found for code={code}"
                 logger.error(error_msg)
                 return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
@@ -349,10 +352,15 @@ def get_contract():
         elif type_ == "futures":
             # 查詢期貨合約
             logger.info(f"Fetching futures contract for code={code}")
+            # 嘗試直接使用 code 查找
             contract = api.Contracts.Futures[code]
             market = "Futures"
 
+            # 如果找不到，嘗試列出所有期貨合約進行診斷
             if contract is None:
+                logger.info(f"Contract not found for code={code}, listing available futures contracts")
+                available_futures = {c.code: c.__dict__ for c in list(api.Contracts.Futures) if hasattr(c, 'code')}
+                logger.info(f"Available futures contracts: {json.dumps(available_futures, default=str)}")
                 error_msg = f"Futures contract not found for code={code}"
                 logger.error(error_msg)
                 return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
