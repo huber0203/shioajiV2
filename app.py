@@ -100,18 +100,12 @@ def login():
         logger.error(f"Exception traceback: {sys.exc_info()}")
         return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
-@app.route('/quote', methods=['POST'])
+@app.route('/quote', methods=['GET'])  # 從 POST 改為 GET
 def quote():
     global api
     try:
-        data = request.get_json()
-        if not data:
-            error_msg = "Request body is empty"
-            logger.error(error_msg)
-            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
-
-        code = data.get("code")  # 改為官方參數 "code"
-        type_ = data.get("type", "stock")  # 預設為 stock
+        code = request.args.get("code")  # 使用官方參數 "code"，從 URL 參數獲取
+        type_ = request.args.get("type", "stock")  # 從 URL 參數獲取，預設為 stock
 
         if not code:
             error_msg = "Missing required parameter: code"
