@@ -35,7 +35,7 @@ def login():
         if not data:
             error_msg = "Request body is empty"
             logger.error(error_msg)
-            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         api_key = data.get("api_key")
         secret_key = data.get("secret_key")
@@ -58,13 +58,13 @@ def login():
         if missing_params:
             error_msg = f"Missing required parameters: {', '.join(missing_params)}"
             logger.error(error_msg)
-            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         if not simulation_mode:
             if not os.path.exists(ca_path):
                 error_msg = f"CA file not found at {ca_path}"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
             logger.info(f"CA file found at {ca_path}")
 
         logger.info(f"Received login request: api_key={api_key[:4]}****, secret_key={secret_key[:4]}****")
@@ -77,7 +77,7 @@ def login():
             if not result:
                 error_msg = "Failed to activate CA"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
             logger.info("CA activated successfully")
 
         logger.info("Logging into Shioaji")
@@ -90,7 +90,7 @@ def login():
 
         return {
             "statusCode": 200,
-            "body": json.dumps({"message": "Login successful", "accounts": accounts}, default=str)
+            "body": json.dumps({"message": "Login successful", "accounts": accounts}, default=str, ensure_ascii=False)
         }
 
     except Exception as e:
@@ -98,7 +98,7 @@ def login():
         logger.error(error_msg)
         logger.error(f"Exception type: {type(e).__name__}")
         logger.error(f"Exception traceback: {sys.exc_info()}")
-        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
 @app.route('/quote', methods=['GET'])
 def quote():
@@ -110,12 +110,12 @@ def quote():
         if not code:
             error_msg = "Missing required parameter: code"
             logger.error(error_msg)
-            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         if api is None:
             error_msg = "Shioaji API not initialized. Please login first."
             logger.error(error_msg)
-            return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         logger.info(f"Received quote request: code={code}, type={type_}")
 
@@ -147,7 +147,7 @@ def quote():
             if contract is None:
                 error_msg = f"Contract not found for code={code} in TSE, OTC, or OES"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         elif type_ == "futures":
             # 查詢期貨合約
@@ -158,7 +158,7 @@ def quote():
             if contract is None:
                 error_msg = f"Futures contract not found for code={code}"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         elif type_ == "options":
             # 查詢選擇權合約
@@ -169,7 +169,7 @@ def quote():
             if contract is None:
                 error_msg = f"Options contract not found for code={code}"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         elif type_ == "index":
             # 查詢指數合約
@@ -180,12 +180,12 @@ def quote():
             if contract is None:
                 error_msg = f"Index contract not found for code={code} in TSE"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         else:
             error_msg = f"Unsupported type: {type_}. Supported types are: stock, futures, options, index"
             logger.error(error_msg)
-            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         # 記錄合約資料
         logger.info(f"Contract found in {market}: {json.dumps(contract.__dict__, default=str)}")
@@ -202,19 +202,19 @@ def quote():
                 "quote": quote,
                 "market": market,
                 "type": type_
-            }, default=str)
+            }, default=str, ensure_ascii=False)
         }
 
     except KeyError as ke:
         error_msg = f"Contract not found for code={code} (type={type_}, KeyError: {str(ke)})"
         logger.error(error_msg)
-        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
     except Exception as e:
         error_msg = f"Error in quote: {str(e)} (type={type_})"
         logger.error(error_msg)
         logger.error(f"Exception type: {type(e).__name__}")
         logger.error(f"Exception traceback: {sys.exc_info()}")
-        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
 @app.route('/contracts', methods=['GET'])
 def get_contracts():
@@ -223,7 +223,7 @@ def get_contracts():
         if api is None:
             error_msg = "Shioaji API not initialized. Please login first."
             logger.error(error_msg)
-            return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         # 獲取 TSE 股票合約資料
         logger.info("Fetching TSE contracts")
@@ -287,7 +287,7 @@ def get_contracts():
                 "futures_contracts": futures_contracts,
                 "options_contracts": options_contracts,
                 "index_contracts": index_contracts
-            }, default=str)
+            }, default=str, ensure_ascii=False)
         }
 
     except Exception as e:
@@ -295,7 +295,7 @@ def get_contracts():
         logger.error(error_msg)
         logger.error(f"Exception type: {type(e).__name__}")
         logger.error(f"Exception traceback: {sys.exc_info()}")
-        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
 @app.route('/contract', methods=['GET'])
 def get_contract():
@@ -307,12 +307,12 @@ def get_contract():
         if not code:
             error_msg = "Missing required parameter: code"
             logger.error(error_msg)
-            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         if api is None:
             error_msg = "Shioaji API not initialized. Please login first."
             logger.error(error_msg)
-            return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         logger.info(f"Received contract request: code={code}, type={type_}")
 
@@ -344,7 +344,7 @@ def get_contract():
             if contract is None:
                 error_msg = f"Contract not found for code={code} in TSE, OTC, or OES"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         elif type_ == "futures":
             # 查詢期貨合約
@@ -355,7 +355,7 @@ def get_contract():
             if contract is None:
                 error_msg = f"Futures contract not found for code={code}"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         elif type_ == "options":
             # 查詢選擇權合約
@@ -366,7 +366,7 @@ def get_contract():
             if contract is None:
                 error_msg = f"Options contract not found for code={code}"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         elif type_ == "index":
             # 查詢指數合約
@@ -377,12 +377,12 @@ def get_contract():
             if contract is None:
                 error_msg = f"Index contract not found for code={code} in TSE"
                 logger.error(error_msg)
-                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         else:
             error_msg = f"Unsupported type: {type_}. Supported types are: stock, futures, options, index"
             logger.error(error_msg)
-            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
         # 返回商品檔資訊
         return {
@@ -404,19 +404,19 @@ def get_contract():
                 },
                 "market": market,
                 "type": type_
-            }, default=str)
+            }, default=str, ensure_ascii=False)
         }
 
     except KeyError as ke:
         error_msg = f"Contract not found for code={code} (type={type_}, KeyError: {str(ke)})"
         logger.error(error_msg)
-        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
     except Exception as e:
         error_msg = f"Error in contract: {str(e)} (type={type_})"
         logger.error(error_msg)
         logger.error(f"Exception type: {type(e).__name__}")
         logger.error(f"Exception traceback: {sys.exc_info()}")
-        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg}, ensure_ascii=False)}
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
