@@ -135,8 +135,17 @@ def quote():
                 contract = api.Contracts.Stocks.OTC[code]
                 market = "OTC"
 
+            # 如果 OTC 中找不到，嘗試從 OES（興櫃）查詢
             if contract is None:
-                error_msg = f"Contract not found for code={code} in TSE or OTC"
+                logger.info(f"Contract not found in OTC, trying OES for code={code}")
+                try:
+                    contract = api.Contracts.Stocks.OES[code]
+                    market = "OES"
+                except AttributeError:
+                    logger.info("OES market not supported or accessible in this context")
+
+            if contract is None:
+                error_msg = f"Contract not found for code={code} in TSE, OTC, or OES"
                 logger.error(error_msg)
                 return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
@@ -218,27 +227,54 @@ def get_contracts():
 
         # 獲取 TSE 股票合約資料
         logger.info("Fetching TSE contracts")
-        tse_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Stocks.TSE}
+        tse_contracts = {}
+        for contract in list(api.Contracts.Stocks.TSE):
+            if hasattr(contract, 'code'):
+                tse_contracts[contract.code] = contract.__dict__
         logger.info("TSE contracts fetched successfully")
 
         # 獲取 OTC 股票合約資料
         logger.info("Fetching OTC contracts")
-        otc_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Stocks.OTC}
+        otc_contracts = {}
+        for contract in list(api.Contracts.Stocks.OTC):
+            if hasattr(contract, 'code'):
+                otc_contracts[contract.code] = contract.__dict__
         logger.info("OTC contracts fetched successfully")
+
+        # 獲取 OES（興櫃）股票合約資料
+        logger.info("Fetching OES contracts")
+        oes_contracts = {}
+        try:
+            for contract in list(api.Contracts.Stocks.OES):
+                if hasattr(contract, 'code'):
+                    oes_contracts[contract.code] = contract.__dict__
+            logger.info("OES contracts fetched successfully")
+        except AttributeError:
+            logger.info("OES market not supported or accessible in this context")
+            oes_contracts = {}
 
         # 獲取期貨合約資料
         logger.info("Fetching Futures contracts")
-        futures_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Futures}
+        futures_contracts = {}
+        for contract in list(api.Contracts.Futures):
+            if hasattr(contract, 'code'):
+                futures_contracts[contract.code] = contract.__dict__
         logger.info("Futures contracts fetched successfully")
 
         # 獲取選擇權合約資料
         logger.info("Fetching Options contracts")
-        options_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Options}
+        options_contracts = {}
+        for contract in list(api.Contracts.Options):
+            if hasattr(contract, 'code'):
+                options_contracts[contract.code] = contract.__dict__
         logger.info("Options contracts fetched successfully")
 
         # 獲取指數合約資料
         logger.info("Fetching Index contracts")
-        index_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Indexs.TSE}
+        index_contracts = {}
+        for contract in list(api.Contracts.Indexs.TSE):
+            if hasattr(contract, 'code'):
+                index_contracts[contract.code] = contract.__dict__
         logger.info("Index contracts fetched successfully")
 
         return {
@@ -247,6 +283,7 @@ def get_contracts():
                 "message": "Contracts fetched",
                 "tse_contracts": tse_contracts,
                 "otc_contracts": otc_contracts,
+                "oes_contracts": oes_contracts,
                 "futures_contracts": futures_contracts,
                 "options_contracts": options_contracts,
                 "index_contracts": index_contracts
