@@ -297,5 +297,126 @@ def get_contracts():
         logger.error(f"Exception traceback: {sys.exc_info()}")
         return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
+@app.route('/contract', methods=['GET'])
+def get_contract():
+    global api
+    try:
+        code = request.args.get("code")  # 使用官方參數 "code"
+        type_ = request.args.get("type", "stock")  # 預設為 stock
+
+        if not code:
+            error_msg = "Missing required parameter: code"
+            logger.error(error_msg)
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+
+        if api is None:
+            error_msg = "Shioaji API not initialized. Please login first."
+            logger.error(error_msg)
+            return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+
+        logger.info(f"Received contract request: code={code}, type={type_}")
+
+        # 根據 type 選擇合約類型
+        contract = None
+        market = None
+
+        if type_ == "stock":
+            # 嘗試從 TSE 查詢股票合約
+            logger.info(f"Fetching contract for code={code} from TSE")
+            contract = api.Contracts.Stocks.TSE[code]
+            market = "TSE"
+
+            # 如果 TSE 中找不到，嘗試從 OTC 查詢
+            if contract is None:
+                logger.info(f"Contract not found in TSE, trying OTC for code={code}")
+                contract = api.Contracts.Stocks.OTC[code]
+                market = "OTC"
+
+            # 如果 OTC 中找不到，嘗試從 OES（興櫃）查詢
+            if contract is None:
+                logger.info(f"Contract not found in OTC, trying OES for code={code}")
+                try:
+                    contract = api.Contracts.Stocks.OES[code]
+                    market = "OES"
+                except AttributeError:
+                    logger.info("OES market not supported or accessible in this context")
+
+            if contract is None:
+                error_msg = f"Contract not found for code={code} in TSE, OTC, or OES"
+                logger.error(error_msg)
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+
+        elif type_ == "futures":
+            # 查詢期貨合約
+            logger.info(f"Fetching futures contract for code={code}")
+            contract = api.Contracts.Futures[code]
+            market = "Futures"
+
+            if contract is None:
+                error_msg = f"Futures contract not found for code={code}"
+                logger.error(error_msg)
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+
+        elif type_ == "options":
+            # 查詢選擇權合約
+            logger.info(f"Fetching options contract for code={code}")
+            contract = api.Contracts.Options[code]
+            market = "Options"
+
+            if contract is None:
+                error_msg = f"Options contract not found for code={code}"
+                logger.error(error_msg)
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+
+        elif type_ == "index":
+            # 查詢指數合約
+            logger.info(f"Fetching index contract for code={code} from TSE")
+            contract = api.Contracts.Indexs.TSE[code]
+            market = "Index"
+
+            if contract is None:
+                error_msg = f"Index contract not found for code={code} in TSE"
+                logger.error(error_msg)
+                return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+
+        else:
+            error_msg = f"Unsupported type: {type_}. Supported types are: stock, futures, options, index"
+            logger.error(error_msg)
+            return {"statusCode": 400, "body": json.dumps({"error": error_msg})}
+
+        # 返回商品檔資訊
+        return {
+            "statusCode": 200,
+            "body": json.dumps({
+                "message": "Contract fetched",
+                "contract": {
+                    "exchange": contract.exchange.value if hasattr(contract, 'exchange') else None,
+                    "code": contract.code if hasattr(contract, 'code') else None,
+                    "symbol": contract.symbol if hasattr(contract, 'symbol') else None,
+                    "name": contract.name if hasattr(contract, 'name') else None,
+                    "category": contract.category if hasattr(contract, 'category') else None,
+                    "unit": contract.unit if hasattr(contract, 'unit') else None,
+                    "limit_up": contract.limit_up if hasattr(contract, 'limit_up') else None,
+                    "limit_down": contract.limit_down if hasattr(contract, 'limit_down') else None,
+                    "reference": contract.reference if hasattr(contract, 'reference') else None,
+                    "update_date": contract.update_date if hasattr(contract, 'update_date') else None,
+                    "day_trade": contract.day_trade.value if hasattr(contract, 'day_trade') else None
+                },
+                "market": market,
+                "type": type_
+            }, default=str)
+        }
+
+    except KeyError as ke:
+        error_msg = f"Contract not found for code={code} (type={type_}, KeyError: {str(ke)})"
+        logger.error(error_msg)
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+    except Exception as e:
+        error_msg = f"Error in contract: {str(e)} (type={type_})"
+        logger.error(error_msg)
+        logger.error(f"Exception type: {type(e).__name__}")
+        logger.error(f"Exception traceback: {sys.exc_info()}")
+        return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
