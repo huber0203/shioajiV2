@@ -100,12 +100,12 @@ def login():
         logger.error(f"Exception traceback: {sys.exc_info()}")
         return {"statusCode": 500, "body": json.dumps({"error": error_msg})}
 
-@app.route('/quote', methods=['GET'])  # 從 POST 改為 GET
+@app.route('/quote', methods=['GET'])
 def quote():
     global api
     try:
-        code = request.args.get("code")  # 使用官方參數 "code"，從 URL 參數獲取
-        type_ = request.args.get("type", "stock")  # 從 URL 參數獲取，預設為 stock
+        code = request.args.get("code")  # 使用官方參數 "code"
+        type_ = request.args.get("type", "stock")  # 預設為 stock
 
         if not code:
             error_msg = "Missing required parameter: code"
@@ -218,27 +218,27 @@ def get_contracts():
 
         # 獲取 TSE 股票合約資料
         logger.info("Fetching TSE contracts")
-        tse_contracts = {k: v.__dict__ if v is not None else None for k, v in api.Contracts.Stocks.TSE.items()}
+        tse_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Stocks.TSE}
         logger.info("TSE contracts fetched successfully")
 
         # 獲取 OTC 股票合約資料
         logger.info("Fetching OTC contracts")
-        otc_contracts = {k: v.__dict__ if v is not None else None for k, v in api.Contracts.Stocks.OTC.items()}
+        otc_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Stocks.OTC}
         logger.info("OTC contracts fetched successfully")
 
         # 獲取期貨合約資料
         logger.info("Fetching Futures contracts")
-        futures_contracts = {k: v.__dict__ if v is not None else None for k, v in api.Contracts.Futures.items()}
+        futures_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Futures}
         logger.info("Futures contracts fetched successfully")
 
         # 獲取選擇權合約資料
         logger.info("Fetching Options contracts")
-        options_contracts = {k: v.__dict__ if v is not None else None for k, v in api.Contracts.Options.items()}
+        options_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Options}
         logger.info("Options contracts fetched successfully")
 
         # 獲取指數合約資料
         logger.info("Fetching Index contracts")
-        index_contracts = {k: v.__dict__ if v is not None else None for k, v in api.Contracts.Indexs.TSE.items()}
+        index_contracts = {contract.code: contract.__dict__ if contract is not None else None for contract in api.Contracts.Indexs.TSE}
         logger.info("Index contracts fetched successfully")
 
         return {
