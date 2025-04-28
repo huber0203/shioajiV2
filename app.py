@@ -6,36 +6,42 @@ app = Flask(__name__)
 # 儲存 Shioaji API 實例，避免重複登入
 api = None
 
-# 檢查是否已登入，如果未登入則使用提供的金鑰登入
-def ensure_login():
+# 登入端點
+@app.route('/login', methods=['POST'])
+def login():
     global api
+    # 從標頭中獲取金鑰
+    api_key = request.headers.get('X-API-Key')
+    secret_key = request.headers.get('X-Secret-Key')
+
+    if not api_key or not secret_key:
+        return jsonify({"error": "缺少必要的標頭: X-API-Key 和 X-Secret-Key"}), 401
+
+    try:
+        api = sj.Shioaji(simulation=False)  # 正式環境，設為 True 可使用模擬模式
+        api.login(
+            api_key=api_key,
+            secret_key=secret_key,
+            contracts_timeout=10000
+        )
+        print("Shioaji 登入成功")
+        return jsonify({"message": "登入成功"}), 200
+    except Exception as e:
+        print(f"Shioaji 登入失敗: {str(e)}")
+        api = None  # 確保失敗時清除 api 物件
+        return jsonify({"error": f"登入失敗: {str(e)}"}), 401
+
+# 檢查是否已登入
+def check_login():
     if api is None:
-        # 從標頭中獲取金鑰
-        api_key = request.headers.get('X-API-Key')
-        secret_key = request.headers.get('X-Secret-Key')
-
-        if not api_key or not secret_key:
-            return jsonify({"error": "缺少必要的標頭: X-API-Key 和 X-Secret-Key"}), 401
-
-        try:
-            api = sj.Shioaji(simulation=False)  # 正式環境，設為 True 可使用模擬模式
-            api.login(
-                api_key=api_key,
-                secret_key=secret_key,
-                contracts_timeout=10000
-            )
-            print("Shioaji 登入成功")
-        except Exception as e:
-            print(f"Shioaji 登入失敗: {str(e)}")
-            return jsonify({"error": f"登入失敗: {str(e)}"}), 401
-
+        return jsonify({"error": "尚未登入，請先調用 /login 端點"}), 401
     return None
 
 # 查詢股票報價端點
 @app.route('/quote', methods=['GET'])
 def get_quote():
-    # 檢查並登入
-    login_error = ensure_login()
+    # 檢查是否已登入
+    login_error = check_login()
     if login_error:
         return login_error
 
@@ -72,8 +78,8 @@ def get_quote():
 # 商品檔端點
 @app.route('/contract', methods=['GET'])
 def get_contract():
-    # 檢查並登入
-    login_error = ensure_login()
+    # 檢查是否已登入
+    login_error = check_login()
     if login_error:
         return login_error
 
