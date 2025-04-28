@@ -1,143 +1,240 @@
 from flask import Flask, request, jsonify
 import shioaji as sj
+import logging
 import os
 
 app = Flask(__name__)
 
-# 儲存 Shioaji API 實例，避免重複登入
+# 設置日誌，寫入 /tmp/shioaji.log
+logger = logging.getLogger('shioaji')
+logger.setLevel(logging.INFO)
+handler = logging.FileHandler('/tmp/shioaji.log')
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.handlers = [handler]
+
+# 全局變數，用於儲存 Shioaji API 實例
 api = None
 
 # 登入端點
 @app.route('/login', methods=['POST'])
 def login():
     global api
-    # 從標頭中獲取金鑰
-    api_key = request.headers.get('X-API-Key')
-    secret_key = request.headers.get('X-Secret-Key')
-
-    if not api_key or not secret_key:
-        return jsonify({"error": "缺少必要的標頭: X-API-Key 和 X-Secret-Key"}), 401
-
-    # 從請求主體中獲取憑證參數
-    data = request.get_json() or {}
-    ca_path = data.get('ca_path')
-    ca_passwd = data.get('ca_passwd')
-    person_id = data.get('person_id')
-    simulation_mode = data.get('simulation_mode', False)  # 預設為 False（正式環境）
-
-    # 驗證憑證參數（正式環境需要）
-    if not simulation_mode and (not ca_path or not ca_passwd or not person_id):
-        return jsonify({"error": "正式環境需要提供 ca_path, ca_passwd 和 person_id"}), 400
-
     try:
-        # 初始化 Shioaji API
-        api = sj.Shioaji(simulation=simulation_mode)
-        api.login(
-            api_key=api_key,
-            secret_key=secret_key,
-            contracts_timeout=10000
-        )
-        print("Shioaji 登入成功")
+        data = request.get_json()
+        if not data:
+            logger.error("Request body is empty")
+            return jsonify({"error": "Request body is empty"}), 400
 
-        # 如果是正式環境，啟用憑證
+        api_key = data.get("api_key")
+        secret_key = data.get("secret_key")
+        ca_path = data.get("ca_path", "/app/Sinopac.pfx")  # Zeabur 支援 /app 資料夾
+        ca_passwd = data.get("ca_passwd")
+        person_id = data.get("person_id")
+        simulation_mode = data.get("simulation_mode", False)
+
+        # 驗證參數
+        missing_params = []
+        if not api_key:
+            missing_params.append("api_key")
+        if not secret_key:
+            missing_params.append("secret_key")
         if not simulation_mode:
-            # 檢查憑證檔案是否存在
+            if not ca_passwd:
+                missing_params.append("ca_passwd")
+            if not person_id:
+                missing_params.append("person_id")
+
+        if missing_params:
+            error_msg = f"Missing required parameters: {', '.join(missing_params)}"
+            logger.error(error_msg)
+            return jsonify({"error": error_msg}), 400
+
+        # 檢查憑證檔案（正式環境）
+        if not simulation_mode:
             if not os.path.exists(ca_path):
-                return jsonify({"error": f"憑證檔案 {ca_path} 不存在"}), 400
+                error_msg = f"CA file not found at {ca_path}"
+                logger.error(error_msg)
+                return jsonify({"error": error_msg}), 500
+            logger.info(f"CA file found at {ca_path}")
 
-            result = api.activate_ca(
-                ca_path=ca_path,
-                ca_passwd=ca_passwd,
-                person_id=person_id
-            )
+        logger.info("Initializing Shioaji")
+        api = sj.Shioaji(simulation=simulation_mode)
+
+        if not simulation_mode:
+            logger.info("Activating CA")
+            result = api.activate_ca(ca_path=ca_path, ca_passwd=ca_passwd, person_id=person_id)
             if not result:
-                return jsonify({"error": "憑證啟用失敗"}), 400
-            print("Shioaji 憑證啟用成功")
+                error_msg = "Failed to activate CA"
+                logger.error(error_msg)
+                return jsonify({"error": error_msg}), 500
+            logger.info("CA activated successfully")
 
-        return jsonify({"message": "登入成功"}), 200
+        logger.info("Logging into Shioaji")
+        accounts = api.login(api_key=api_key, secret_key=secret_key)
+        logger.info("Login successful")
+
+        logger.info("Fetching contracts data")
+        api.fetch_contracts()
+        logger.info("Contracts data fetched successfully")
+
+        return jsonify({"message": "Login successful", "accounts": accounts}), 200
+
     except Exception as e:
-        print(f"Shioaji 登入或憑證啟用失敗: {str(e)}")
-        api = None  # 確保失敗時清除 api 物件
-        return jsonify({"error": f"登入或憑證啟用失敗: {str(e)}"}), 401
+        error_msg = f"Error in login: {str(e)}"
+        logger.error(error_msg)
+        api = None
+        return jsonify({"error": error_msg}), 500
 
 # 檢查是否已登入
 def check_login():
     if api is None:
-        return jsonify({"error": "尚未登入，請先調用 /login 端點"}), 401
+        logger.error("Shioaji API not initialized")
+        return jsonify({"error": "Shioaji API not initialized. Please login first."}), 401
     return None
 
-# 查詢股票報價端點
+# 查詢報價端點（符合 Shioaji 官方參數）
 @app.route('/quote', methods=['GET'])
-def get_quote():
+def quote():
     # 檢查是否已登入
     login_error = check_login()
     if login_error:
         return login_error
 
-    # 獲取股票代碼（使用官方的 "code" 命名）
-    code = request.args.get('code')
-    if not code:
-        return jsonify({"error": "缺少必要的參數: code"}), 400
-
     try:
-        # 查詢商品檔（遵循 Shioaji 官方用法）
-        contract = api.Contracts.Stocks[code]
-        if not contract:
-            return jsonify({"error": f"股票代碼 {code} 無效"}), 400
+        code = request.args.get("code")  # 使用官方參數 "code"
+        type_ = request.args.get("type", "stock")  # 預設為 stock
 
-        # 查詢即時報價（使用 api.snapshots）
-        snapshot = api.snapshots([contract])[0]
+        if not code:
+            error_msg = "Missing required parameter: code"
+            logger.error(error_msg)
+            return jsonify({"error": error_msg}), 400
 
-        # 格式化回應，包含官方欄位
-        response = {
-            "code": snapshot.code,
-            "exchange": snapshot.exchange,
-            "name": contract.name,
-            "close": snapshot.close,
-            "high": snapshot.high,
-            "low": snapshot.low,
-            "volume": snapshot.volume,
-            "datetime": snapshot.datetime
-        }
-        return jsonify(response)
+        logger.info(f"Received quote request: code={code}, type={type_}")
 
+        # 根據 type 選擇合約類型
+        contract = None
+        market = None
+
+        if type_ == "stock":
+            logger.info(f"Fetching stock contract for code={code} from TSE")
+            contract = api.Contracts.Stocks.TSE[code]
+            market = "TSE"
+
+            if contract is None:
+                logger.info(f"Contract not found in TSE, trying OTC for code={code}")
+                contract = api.Contracts.Stocks.OTC[code]
+                market = "OTC"
+
+            if contract is None:
+                error_msg = f"Contract not found for code={code} in TSE or OTC"
+                logger.error(error_msg)
+                return jsonify({"error": error_msg}), 404
+
+        elif type_ == "futures":
+            logger.info(f"Fetching futures contract for code={code}")
+            contract = api.Contracts.Futures[code]
+            market = "Futures"
+
+            if contract is None:
+                error_msg = f"Futures contract not found for code={code}"
+                logger.error(error_msg)
+                return jsonify({"error": error_msg}), 404
+
+        elif type_ == "options":
+            logger.info(f"Fetching options contract for code={code}")
+            contract = api.Contracts.Options[code]
+            market = "Options"
+
+            if contract is None:
+                error_msg = f"Options contract not found for code={code}"
+                logger.error(error_msg)
+                return jsonify({"error": error_msg}), 404
+
+        elif type_ == "index":
+            logger.info(f"Fetching index contract for code={code} from TSE")
+            contract = api.Contracts.Indexs.TSE[code]
+            market = "Index"
+
+            if contract is None:
+                error_msg = f"Index contract not found for code={code} in TSE"
+                logger.error(error_msg)
+                return jsonify({"error": error_msg}), 404
+
+        else:
+            error_msg = f"Unsupported type: {type_}. Supported types are: stock, futures, options, index"
+            logger.error(error_msg)
+            return jsonify({"error": error_msg}), 400
+
+        # 查詢快照資料
+        logger.info(f"Fetching quote for code={code} (type={type_})")
+        quote = api.snapshots([contract])[0]
+
+        return jsonify({
+            "message": "Quote fetched",
+            "quote": {
+                "code": quote.code,
+                "exchange": quote.exchange,
+                "close": quote.close,
+                "high": quote.high,
+                "low": quote.low,
+                "volume": quote.volume,
+                "datetime": str(quote.datetime)
+            },
+            "market": market,
+            "type": type_
+        }), 200
+
+    except KeyError as ke:
+        error_msg = f"Contract not found for code={code} (type={type_}, KeyError: {str(ke)})"
+        logger.error(error_msg)
+        return jsonify({"error": error_msg}), 404
     except Exception as e:
-        return jsonify({"error": f"查詢失敗: {str(e)}"}), 500
+        error_msg = f"Error in quote: {str(e)} (type={type_})"
+        logger.error(error_msg)
+        return jsonify({"error": error_msg}), 500
 
-# 商品檔端點
-@app.route('/contract', methods=['GET'])
-def get_contract():
+# 查詢所有合約端點
+@app.route('/contracts', methods=['GET'])
+def get_contracts():
     # 檢查是否已登入
     login_error = check_login()
     if login_error:
         return login_error
 
-    code = request.args.get('code')
-    if not code:
-        return jsonify({"error": "缺少必要的參數: code"}), 400
-
     try:
-        contract = api.Contracts.Stocks[code]
-        if not contract:
-            return jsonify({"error": f"股票代碼 {code} 無效"}), 400
+        type_ = request.args.get("type", "stock")  # 預設為 stock
 
-        response = {
-            "exchange": contract.exchange.value,
-            "code": contract.code,
-            "symbol": contract.symbol,
-            "name": contract.name,
-            "category": contract.category,
-            "unit": contract.unit,
-            "limit_up": contract.limit_up,
-            "limit_down": contract.limit_down,
-            "reference": contract.reference,
-            "update_date": contract.update_date,
-            "day_trade": contract.day_trade.value
-        }
-        return jsonify(response)
+        contracts = None
+        if type_ == "stock":
+            logger.info("Fetching TSE and OTC contracts")
+            tse_contracts = {k: v.__dict__ for k, v in api.Contracts.Stocks.TSE.items() if v is not None}
+            otc_contracts = {k: v.__dict__ for k, v in api.Contracts.Stocks.OTC.items() if v is not None}
+            contracts = {"TSE": tse_contracts, "OTC": otc_contracts}
+        elif type_ == "futures":
+            logger.info("Fetching Futures contracts")
+            contracts = {k: v.__dict__ for k, v in api.Contracts.Futures.items() if v is not None}
+        elif type_ == "options":
+            logger.info("Fetching Options contracts")
+            contracts = {k: v.__dict__ for k, v in api.Contracts.Options.items() if v is not None}
+        elif type_ == "index":
+            logger.info("Fetching Index contracts")
+            contracts = {k: v.__dict__ for k, v in api.Contracts.Indexs.TSE.items() if v is not None}
+        else:
+            error_msg = f"Unsupported type: {type_}. Supported types are: stock, futures, options, index"
+            logger.error(error_msg)
+            return jsonify({"error": error_msg}), 400
+
+        return jsonify({
+            "message": "Contracts fetched",
+            "type": type_,
+            "contracts": contracts
+        }), 200
 
     except Exception as e:
-        return jsonify({"error": f"查詢失敗: {str(e)}"}), 500
+        error_msg = f"Error in contracts: {str(e)}"
+        logger.error(error_msg)
+        return jsonify({"error": error_msg}), 500
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
