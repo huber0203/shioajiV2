@@ -1,2 +1,2 @@
-flask==2.3.3
-shioaji==1.2.5
+flask
+shioaji
